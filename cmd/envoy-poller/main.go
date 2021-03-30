@@ -3,17 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/cloudkucooland/EnvoyCharts"
-	"github.com/cloudkucooland/go-envoy"
 	"time"
 )
 
 func main() {
-	client, err := envoycharts.New()
-	if err != nil {
-		panic(err)
-	}
-
-	envoy, err := envoy.New("envoy")
+	client, err := envoycharts.New("envoy")
 	if err != nil {
 		panic(err)
 	}
@@ -21,13 +15,13 @@ func main() {
 	// catch signals, etc
 	ticker := time.Tick(60 * time.Second)
 	for range ticker {
-		p, c, n, err := envoy.Now()
+		err := client.Sample()
 		if err != nil {
 			fmt.Println(err.Error())
 			break
 		}
-		client.Insert(p, c, n)
 	}
 
+	client.Close()
 	fmt.Println("done")
 }
