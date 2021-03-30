@@ -3,16 +3,22 @@ package envoycharts
 import (
 	"fmt"
 	"github.com/cloudkucooland/EnvoyCharts/internal/model"
+	"github.com/cloudkucooland/go-envoy"
 	"github.com/objectbox/objectbox-go/objectbox"
 	"time"
 )
 
 type Client struct {
-	Ob  *objectbox.ObjectBox
-	Box *model.EntryBox
+	Ob      *objectbox.ObjectBox
+	Samples *model.EntryBox
+	Envoy   *envoy.Envoy
 }
 
-func New() (*Client, error) {
+func New(host string) (*Client, error) {
+	if host == "" {
+		host = "envoy.local"
+	}
+
 	c := Client{}
 	var err error
 
@@ -20,9 +26,18 @@ func New() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.Box = model.BoxForEntry(c.Ob)
+	c.Samples = model.BoxForEntry(c.Ob)
+
+	c.Envoy, err = envoy.New(host)
+	if err != nil {
+		panic(err)
+	}
 
 	return &c, nil
+}
+
+func (c *Client) Close() {
+	c.Ob.Close()
 }
 
 func database() (*objectbox.ObjectBox, error) {
@@ -37,26 +52,28 @@ func database() (*objectbox.ObjectBox, error) {
 	return objectBox, nil
 }
 
-func (c *Client) Insert(prod, consum, net float64) error {
+func (c *Client) Sample() error {
 	e := model.Entry{
-		Date:         time.Now().Unix(),
-		ProductionW:  prod,
-		ConsumptionW: consum,
-		NetW:         net,
+		Date: time.Now().Unix(),
 	}
 
-	if _, err := c.Box.Put(&e); err != nil {
-		fmt.Printf("could not insert sample: %s\n", err)
+	var err error
+	e.ProductionW, e.ConsumptionW, e.NetW, err = c.Envoy.Now()
+	if err != nil {
+		fmt.Println(err.Error())
 		return err
 	}
 
+	if _, err := c.Samples.Put(&e); err != nil {
+		fmt.Printf("could not insert sample: %s\n", err)
+		return err
+	}
 	fmt.Printf("%+v\n", e)
-
 	return nil
 }
 
 func (c *Client) GetAll() ([]*model.Entry, error) {
-	entries, err := c.Box.GetAll()
+	entries, err := c.Samples.GetAll()
 	if err != nil {
 		fmt.Println(err)
 		return entries, err
@@ -64,7 +81,7 @@ func (c *Client) GetAll() ([]*model.Entry, error) {
 	return entries, nil
 }
 
-func (c *Client) Day() ([]*model.Entry, error) {
+func (c *Client) Day(t time.Time) ([]*model.Entry, error) {
 	var e []*model.Entry
 	/*
 	   var query = box.Query(

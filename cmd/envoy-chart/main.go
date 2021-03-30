@@ -1,21 +1,55 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/cloudkucooland/EnvoyCharts"
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
-	"os"
-	"time"
 )
 
+var client *envoycharts.Client
+
 func main() {
-	c, err := envoycharts.New()
+	var err error
+	client, err = envoycharts.New("envoy")
 	if err != nil {
 		panic(err)
 	}
 
-	e, err := c.GetAll()
+	// start the poller to query the envoy
+	go poller()
+
+	// start the http service
+	go webservice()
+
+	// listen for a shutdown signal
+	sigch := make(chan os.Signal, 3)
+	signal.Notify(sigch, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
+
+	sig := <-sigch
+	fmt.Println("shutting down", sig)
+	client.Close()
+}
+
+func webservice() {
+	http.HandleFunc("/", handler)
+	http.ListenAndServe(":8081", nil)
+}
+
+func handler(w http.ResponseWriter, _ *http.Request) {
+	barchart(w)
+}
+
+func barchart(w io.Writer) {
+	e, err := client.GetAll()
 	if err != nil {
 		panic(err)
 	}
@@ -41,13 +75,22 @@ func main() {
 		barNet = append(barNet, opts.BarData{Value: 0 - v.NetW})
 	}
 
-	f, err := os.Create("bar.html")
-	if err != nil {
-		panic(err)
-	}
 	bar.SetXAxis(dates).
 		AddSeries("Prod", barProd).
 		AddSeries("Cons", barCon).
 		AddSeries("Net", barNet)
-	bar.Render(f)
+	bar.Render(w)
+}
+
+func poller() {
+	// catch signals, etc
+	ticker := time.Tick(60 * time.Second)
+	for range ticker {
+		err := client.Sample()
+		if err != nil {
+			fmt.Println(err.Error())
+			break
+		}
+	}
+	fmt.Println("shutting down poller")
 }
