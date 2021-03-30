@@ -2,10 +2,15 @@ package envoycharts
 
 import (
 	"fmt"
+	"io"
+	"time"
+
 	"github.com/cloudkucooland/EnvoyCharts/internal/model"
 	"github.com/cloudkucooland/go-envoy"
+	"github.com/go-echarts/go-echarts/v2/charts"
+	"github.com/go-echarts/go-echarts/v2/opts"
+	"github.com/go-echarts/go-echarts/v2/types"
 	"github.com/objectbox/objectbox-go/objectbox"
-	"time"
 )
 
 type Client struct {
@@ -81,16 +86,77 @@ func (c *Client) GetAll() ([]*model.Entry, error) {
 	return entries, nil
 }
 
-func (c *Client) Day(t time.Time) ([]*model.Entry, error) {
-	var e []*model.Entry
-	/*
-	   var query = box.Query(
-	   		User_.Age.GreaterThan().Alias("min age"),
-	   		User_.Age.LessThan().Alias("max age"))
+func (c *Client) GetPastDay() ([]*model.Entry, error) {
+	var query = c.Samples.Query(
+		model.Entry_.Date.GreaterThan(time.Now().Unix() - 86400),
+	)
+	entries, err := query.Find()
+	if err != nil {
+		fmt.Println(err)
+		return entries, err
+	}
+	return entries, nil
+}
 
-	   // Then use the alias when setting the parameter value
-	   query.SetInt64Params(objectbox.Alias("min age"), 50)
-	   query.SetInt64Params(objectbox.Alias("max age"), 100
-	*/
-	return e, nil
+func Barchart(w io.Writer, samples []*model.Entry, title string) {
+	bar := charts.NewBar()
+
+	bar.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{Title: title}),
+		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
+		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
+	)
+
+	barProd := make([]opts.BarData, 0)
+	barCon := make([]opts.BarData, 0)
+	barNet := make([]opts.BarData, 0)
+	dates := make([]string, 0)
+
+	for _, v := range samples {
+		fu := time.Unix(v.Date, 0)
+		t := fu.Format("2006/01/02 15:04:05")
+
+		dates = append(dates, t)
+		barProd = append(barProd, opts.BarData{Value: v.ProductionW})
+		barCon = append(barCon, opts.BarData{Value: 0 - v.ConsumptionW})
+		barNet = append(barNet, opts.BarData{Value: 0 - v.NetW})
+	}
+
+	bar.SetXAxis(dates).
+		AddSeries("Production", barProd).
+		AddSeries("Consumption", barCon).
+		AddSeries("Export/Import", barNet)
+	bar.Render(w)
+}
+
+func Linechart(w io.Writer, samples []*model.Entry, title string) {
+	line := charts.NewLine()
+
+	line.SetGlobalOptions(
+		charts.WithTitleOpts(opts.Title{Title: title}),
+		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
+		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
+	)
+
+	prod := make([]opts.LineData, 0)
+	con := make([]opts.LineData, 0)
+	net := make([]opts.LineData, 0)
+	dates := make([]string, 0)
+
+	for _, v := range samples {
+		fu := time.Unix(v.Date, 0)
+		t := fu.Format("2006/01/02 15:04:05")
+
+		dates = append(dates, t)
+		prod = append(prod, opts.LineData{Value: v.ProductionW})
+		con = append(con, opts.LineData{Value: 0 - v.ConsumptionW})
+		net = append(net, opts.LineData{Value: 0 - v.NetW})
+	}
+
+	line.SetXAxis(dates).
+		AddSeries("Production", prod).
+		AddSeries("Consumption", con).
+		AddSeries("Export/Import", net).
+		SetSeriesOptions(charts.WithLineChartOpts(opts.LineChart{Smooth: true}))
+	line.Render(w)
 }

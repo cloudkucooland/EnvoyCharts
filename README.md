@@ -1,9 +1,23 @@
 # EnvoyCharts
-Small data tracking/charting tool for envoy IQ solar systems
+A small data tracking/charting tool for envoy IQ solar systems
 
-# Two commands
-* envoy-poll -- runs and queries the envoy every 10 minutes for current production/consumption data
-* envoy-chart -- updates the bar.html file with the current chart
+envoy-chart does two things
+* runs in the background and polls the envoy every 10 minutes, putting that data into a database
+* acts as a web server which displays the charts
 
 # Still a work-in-progress
-I'm just getting started. This is not ready for use. It is functional, but will need a lot of work to be useful.
+I'm just getting started.
+
+Right now it supports a single graph (past 24-hours). I will work on adding 7-day and monthly graphs as well, after I collect enough data from my own system.
+
+# Design decisions (or indecisions)
+* 10 minute sampling frequency seems good enough. During initial testing I did every minute, but the graph isn't any more informative at this higher frequency, so I'll stick with 10 minutes for now. Eventually it will be configurable.
+* go-echarts spits out Javascript Apache echarts (an older version at that). It seems nice enough for our purposes and is very simple to work with.
+* ObjectBox database. I've done a lot with sqlite over the years. It's fine. I just wanted to try something else. ObjectBox seems cool for this kind of thing, and very fast.
+* go, because I like go
+
+# To Do
+* not have all the parameters hard coded, especially the hostname/ip address
+* implement dns-sd in the go-envoy package so you don't have to set a hostname/ip at all
+* more charts
+* roll-up boxes (tables) for weekly/montly/yearly charts
