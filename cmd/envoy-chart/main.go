@@ -44,8 +44,30 @@ func webservice() {
 	}
 }
 
-func handler(w http.ResponseWriter, _ *http.Request) {
-	pastDay(w)
+func handler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	date, ok := r.Form["d"]
+	if !ok {
+		pastDay(w)
+	} else {
+		t, err := time.Parse("2006/01/02", date[0])
+		if err != nil {
+			fmt.Println(err)
+			pastDay(w)
+			return
+		}
+		specificDay(w, t)
+	}
+}
+
+func specificDay(w io.Writer, t time.Time) {
+	samples, err := client.GetDay(t)
+	if err != nil {
+		panic(err)
+	}
+	title := fmt.Sprintf("Solar Production for %s", t.Format("2006/02/01"))
+	envoycharts.Linechart(w, samples, title)
 }
 
 func pastDay(w io.Writer) {
