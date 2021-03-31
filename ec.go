@@ -3,6 +3,7 @@ package envoycharts
 import (
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/cloudkucooland/EnvoyCharts/internal/model"
@@ -90,6 +91,26 @@ func (c *Client) GetPastDay() ([]*model.Entry, error) {
 	var query = c.Samples.Query(
 		model.Entry_.Date.GreaterThan(time.Now().Unix() - 86400),
 	)
+	entries, err := query.Find()
+	if err != nil {
+		fmt.Println(err)
+		return entries, err
+	}
+	return entries, nil
+}
+
+func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
+	var maxAlias = objectbox.Alias("max")
+	var minAlias = objectbox.Alias("min")
+	var query = c.Samples.Query(
+		model.Entry_.Date.GreaterThan(0).As(maxAlias),
+		model.Entry_.Date.LessThan(0).As(minAlias),
+	)
+
+	// need some work for timezone...
+	dayStart := int64(math.Floor(float64(t.Unix()/86400)) * 86400)
+	query.SetInt64Params(maxAlias, dayStart)
+	query.SetInt64Params(minAlias, dayStart+86400)
 	entries, err := query.Find()
 	if err != nil {
 		fmt.Println(err)
