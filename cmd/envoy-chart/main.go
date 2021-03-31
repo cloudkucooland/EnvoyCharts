@@ -49,16 +49,34 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	date, ok := r.Form["d"]
 	if !ok {
+		// start day not set, just show the past 24 hours
 		pastDay(w)
-	} else {
-		t, err := time.Parse("2006/01/02", date[0])
-		if err != nil {
-			fmt.Println(err)
-			pastDay(w)
-			return
-		}
-		specificDay(w, t)
+		return
 	}
+	start, err := time.Parse("2006/01/02", date[0])
+	if err != nil {
+		fmt.Println(err)
+		// start day not valid, show past 24h
+		pastDay(w)
+		return
+	}
+
+	enddate, ok := r.Form["end"]
+	if !ok {
+		// start valid, but end not set
+		specificDay(w, start)
+		return
+	}
+	end, err := time.Parse("2006/01/02", enddate[0])
+	if err != nil {
+		fmt.Println(err)
+		// start valid, but end invalid
+		specificDay(w, start)
+		return
+	}
+
+	// both start and end set and valid, show the range
+	dayRange(w, start, end)
 }
 
 func specificDay(w io.Writer, t time.Time) {
@@ -66,7 +84,16 @@ func specificDay(w io.Writer, t time.Time) {
 	if err != nil {
 		panic(err)
 	}
-	title := fmt.Sprintf("Solar Production for %s", t.Format("2006/02/01"))
+	title := fmt.Sprintf("Solar Production for %s", t.Format("2006/01/02"))
+	envoycharts.Linechart(w, samples, title)
+}
+
+func dayRange(w io.Writer, start, end time.Time) {
+	samples, err := client.GetDayRange(start, end)
+	if err != nil {
+		panic(err)
+	}
+	title := fmt.Sprintf("Solar Production %s - %s", start.Format("2006/01/02"), end.Format("2006/01/02"))
 	envoycharts.Linechart(w, samples, title)
 }
 

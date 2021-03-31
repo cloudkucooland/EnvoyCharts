@@ -14,6 +14,10 @@ import (
 	"github.com/objectbox/objectbox-go/objectbox"
 )
 
+var dbdir = "/var/log/envoy"
+var defaultHost = "envoy.local"
+var tzOffset int64 = 3600 * 6 // US/Central
+
 type Client struct {
 	Ob      *objectbox.ObjectBox
 	Samples *model.EntryBox
@@ -22,7 +26,7 @@ type Client struct {
 
 func New(host string) (*Client, error) {
 	if host == "" {
-		host = "envoy.local"
+		host = defaultHost
 	}
 
 	c := Client{}
@@ -36,7 +40,7 @@ func New(host string) (*Client, error) {
 
 	c.Envoy, err = envoy.New(host)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return &c, nil
@@ -49,7 +53,7 @@ func (c *Client) Close() {
 func database() (*objectbox.ObjectBox, error) {
 	builder := objectbox.NewBuilder()
 	builder.Model(model.ObjectBoxModel())
-	builder.Directory("/var/log/envoy")
+	builder.Directory(dbdir)
 	objectBox, err := builder.Build()
 	if err != nil {
 		panic(err)
@@ -74,7 +78,6 @@ func (c *Client) Sample() error {
 		fmt.Printf("could not insert sample: %s\n", err)
 		return err
 	}
-	fmt.Printf("%+v\n", e)
 	return nil
 }
 
@@ -107,10 +110,31 @@ func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
 		model.Entry_.Date.LessThan(0).As(minAlias),
 	)
 
-	// need some work for timezone...
-	dayStart := int64(math.Floor(float64(t.Unix()/86400)) * 86400)
+	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
+	dayStart := int64(math.Floor(float64(t.Unix()/86400))*86400) + tzOffset
 	query.SetInt64Params(maxAlias, dayStart)
 	query.SetInt64Params(minAlias, dayStart+86400)
+	entries, err := query.Find()
+	if err != nil {
+		fmt.Println(err)
+		return entries, err
+	}
+	return entries, nil
+}
+
+func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Entry, error) {
+	var maxAlias = objectbox.Alias("max")
+	var minAlias = objectbox.Alias("min")
+	var query = c.Samples.Query(
+		model.Entry_.Date.GreaterThan(0).As(maxAlias),
+		model.Entry_.Date.LessThan(0).As(minAlias),
+	)
+
+	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
+	dayStart := int64(math.Floor(float64(start.Unix()/86400))*86400) + tzOffset
+	dayEnd := int64(math.Floor(float64(end.Unix()/86400))*86400) + 86399 + tzOffset
+	query.SetInt64Params(maxAlias, dayStart)
+	query.SetInt64Params(minAlias, dayEnd)
 	entries, err := query.Find()
 	if err != nil {
 		fmt.Println(err)
