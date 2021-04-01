@@ -15,20 +15,17 @@ import (
 )
 
 var dbdir = "/var/log/envoy"
-var defaultHost = "envoy.local"
 var tzOffset int64 = 3600 * 6 // US/Central
 
+// Client is the primary handle for the EnvoyChart API
 type Client struct {
 	Ob      *objectbox.ObjectBox
 	Samples *model.EntryBox
 	Envoy   *envoy.Envoy
 }
 
+// New creates a new Client
 func New(host string) (*Client, error) {
-	if host == "" {
-		host = defaultHost
-	}
-
 	c := Client{}
 	var err error
 
@@ -38,14 +35,12 @@ func New(host string) (*Client, error) {
 	}
 	c.Samples = model.BoxForEntry(c.Ob)
 
-	c.Envoy, err = envoy.New(host)
-	if err != nil {
-		return nil, err
-	}
-
+    // if host is unset, discovery happens
+	c.Envoy = envoy.New(host)
 	return &c, nil
 }
 
+// Close shuts down a client
 func (c *Client) Close() {
 	c.Ob.Close()
 }
@@ -62,6 +57,7 @@ func database() (*objectbox.ObjectBox, error) {
 	return objectBox, nil
 }
 
+// Sample polls an envoy device and stores the production values into the database
 func (c *Client) Sample() error {
 	e := model.Entry{
 		Date: time.Now().Unix(),
@@ -81,6 +77,7 @@ func (c *Client) Sample() error {
 	return nil
 }
 
+// GetAll returns all values from the database, probably not useful for anything other than testing
 func (c *Client) GetAll() ([]*model.Entry, error) {
 	entries, err := c.Samples.GetAll()
 	if err != nil {
@@ -90,6 +87,7 @@ func (c *Client) GetAll() ([]*model.Entry, error) {
 	return entries, nil
 }
 
+// GetPastDay gets the samples for the previous 24 hours
 func (c *Client) GetPastDay() ([]*model.Entry, error) {
 	var query = c.Samples.Query(
 		model.Entry_.Date.GreaterThan(time.Now().Unix() - 86400),
@@ -102,6 +100,7 @@ func (c *Client) GetPastDay() ([]*model.Entry, error) {
 	return entries, nil
 }
 
+// GetDay returns all the samples for the day which contains the parameter (adjusted based on the tzOffset value)
 func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
 	var maxAlias = objectbox.Alias("max")
 	var minAlias = objectbox.Alias("min")
@@ -122,6 +121,7 @@ func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
 	return entries, nil
 }
 
+// GetDayRange gets all values between the start and end days
 func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Entry, error) {
 	var maxAlias = objectbox.Alias("max")
 	var minAlias = objectbox.Alias("min")
@@ -143,13 +143,20 @@ func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Entry, er
 	return entries, nil
 }
 
+// Barchart takes a set of samples, and a title and writes the barchart to the specified writer
 func Barchart(w io.Writer, samples []*model.Entry, title string) {
 	bar := charts.NewBar()
+    // use our custom template
+    useECTemplates()
+    // bar.Renderer = NewECRenderer(bar, bar.Validate)
 
 	bar.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{Title: title}),
 		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
 		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
+        // charts.WithToolboxOpts(opts.Toolbox{Show: true}),
+        // charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
+        charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
 	)
 
 	barProd := make([]opts.BarData, 0)
@@ -174,13 +181,21 @@ func Barchart(w io.Writer, samples []*model.Entry, title string) {
 	bar.Render(w)
 }
 
+// Linechart takes a set of samples, and a title and writes the linechart to the specified writer
 func Linechart(w io.Writer, samples []*model.Entry, title string) {
 	line := charts.NewLine()
+    // use our custom template
+    useECTemplates()
+    // line.Renderer = NewECRenderer(line, line.Validate)
 
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{Title: title}),
 		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
 		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
+        // charts.WithToolboxOpts(opts.Toolbox{Show: true}),
+        // charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
+        charts.WithXAxisOpts(opts.XAxis{Name: "Time"}),
+        charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
 	)
 
 	prod := make([]opts.LineData, 0)
@@ -202,6 +217,11 @@ func Linechart(w io.Writer, samples []*model.Entry, title string) {
 		AddSeries("Production", prod).
 		AddSeries("Consumption", con).
 		AddSeries("Export/Import", net).
-		SetSeriesOptions(charts.WithLineChartOpts(opts.LineChart{Smooth: true}))
+		SetSeriesOptions(
+            charts.WithLineChartOpts(opts.LineChart{Smooth: true}),
+            charts.WithAreaStyleOpts(opts.AreaStyle{Opacity: 0.3}),
+            // charts.WithLabelOpts(opts.Label{Show: true}),
+            // charts.WithMarkLineNameTypeItemOpts(opts.MarkLineNameTypeItem{ Name: "kWh", Type: "value", }), 
+        )
 	line.Render(w)
 }
