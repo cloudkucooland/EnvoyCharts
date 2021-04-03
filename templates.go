@@ -8,17 +8,17 @@ import (
 	// "github.com/go-echarts/go-echarts/v2/charts"
 	// "github.com/go-echarts/go-echarts/v2/opts"
 	// "github.com/go-echarts/go-echarts/v2/render"
+	ectpls "github.com/cloudkucooland/EnvoyCharts/templates"
 	tpls "github.com/go-echarts/go-echarts/v2/templates"
-    ectpls "github.com/cloudkucooland/EnvoyCharts/templates"
 )
 
 func useECTemplates() {
-   tpls.BaseTpl = ectpls.BaseTpl
-   tpls.ChartTpl = ectpls.ChartTpl
-   tpls.HeaderTpl = ectpls.HeaderTpl
+	tpls.BaseTpl = ectpls.BaseTpl
+	tpls.ChartTpl = ectpls.ChartTpl
+	tpls.HeaderTpl = ectpls.HeaderTpl
 }
 
-/* 
+/*
 type ecRenderer struct {
     c interface{}
     before []func()

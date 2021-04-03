@@ -13,17 +13,17 @@ import (
 // Barchart takes a set of samples, and a title and writes the barchart to the specified writer
 func Barchart(w io.Writer, samples []*model.Entry, title string) {
 	bar := charts.NewBar()
-    // use our custom template
-    useECTemplates()
-    // bar.Renderer = NewECRenderer(bar, bar.Validate)
+	// use our custom template
+	useECTemplates()
+	// bar.Renderer = NewECRenderer(bar, bar.Validate)
 
 	bar.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{Title: title}),
 		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
 		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
-        // charts.WithToolboxOpts(opts.Toolbox{Show: true}),
-        // charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
-        charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
+		// charts.WithToolboxOpts(opts.Toolbox{Show: true}),
+		// charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
+		charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
 	)
 
 	barProd := make([]opts.BarData, 0)
@@ -51,18 +51,18 @@ func Barchart(w io.Writer, samples []*model.Entry, title string) {
 // Linechart takes a set of samples, and a title and writes the linechart to the specified writer
 func Linechart(w io.Writer, samples []*model.Entry, title string) {
 	line := charts.NewLine()
-    // use our custom template
-    useECTemplates()
-    // line.Renderer = NewECRenderer(line, line.Validate)
+	// use our custom template
+	useECTemplates()
+	// line.Renderer = NewECRenderer(line, line.Validate)
 
 	line.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{Title: title}),
 		charts.WithLegendOpts(opts.Legend{Show: true, Data: []string{"Production", "Consumption", "Export/Import"}}),
 		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeWesteros}),
-        // charts.WithToolboxOpts(opts.Toolbox{Show: true}),
-        // charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
-        charts.WithXAxisOpts(opts.XAxis{Name: "Time"}),
-        charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
+		// charts.WithToolboxOpts(opts.Toolbox{Show: true}),
+		// charts.WithXAxisOpts(opts.XAxis{Type: "time"}),
+		charts.WithXAxisOpts(opts.XAxis{Name: "Time"}),
+		charts.WithYAxisOpts(opts.YAxis{Name: "kWh", Type: "value"}),
 	)
 
 	prod := make([]opts.LineData, 0)
@@ -85,10 +85,10 @@ func Linechart(w io.Writer, samples []*model.Entry, title string) {
 		AddSeries("Consumption", con).
 		AddSeries("Export/Import", net).
 		SetSeriesOptions(
-            charts.WithLineChartOpts(opts.LineChart{Smooth: true}),
-            charts.WithAreaStyleOpts(opts.AreaStyle{Opacity: 0.3}),
-            // charts.WithLabelOpts(opts.Label{Show: true}),
-            // charts.WithMarkLineNameTypeItemOpts(opts.MarkLineNameTypeItem{ Name: "kWh", Type: "value", }), 
-        )
+			charts.WithLineChartOpts(opts.LineChart{Smooth: true}),
+			charts.WithAreaStyleOpts(opts.AreaStyle{Opacity: 0.3}),
+			// charts.WithLabelOpts(opts.Label{Show: true}),
+			// charts.WithMarkLineNameTypeItemOpts(opts.MarkLineNameTypeItem{ Name: "kWh", Type: "value", }),
+		)
 	line.Render(w)
 }

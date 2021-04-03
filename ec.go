@@ -17,6 +17,7 @@ var tzOffset int64 = 3600 * 6 // US/Central
 type Client struct {
 	Ob      *objectbox.ObjectBox
 	Samples *model.EntryBox
+	Daily   *model.DailyBox
 	Envoy   *envoy.Envoy
 }
 
@@ -30,8 +31,9 @@ func New(host string) (*Client, error) {
 		return nil, err
 	}
 	c.Samples = model.BoxForEntry(c.Ob)
+	c.Daily = model.BoxForDaily(c.Ob)
 
-    // if host is unset, discovery happens
+	// if host is unset, discovery happens
 	c.Envoy = envoy.New(host)
 	return &c, nil
 }
@@ -70,6 +72,17 @@ func (c *Client) Sample() error {
 		fmt.Printf("could not insert sample: %s\n", err)
 		return err
 	}
+
+	// overwrite the daily sample
+	d := model.Daily{}
+	d.DID = int64(math.Floor(float64(e.Date/86400))*86400) + tzOffset
+	d.Date = time.Unix(d.DID, 0)
+	d.ProductionkWn, d.ConsumptionkWh, _, err = c.Envoy.Today()
+	if _, err := c.Daily.Put(&d); err != nil {
+		fmt.Printf("could not update daily: %s\n", err)
+		return err
+	}
+
 	return nil
 }
 

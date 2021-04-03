@@ -17,7 +17,7 @@ var client *envoycharts.Client
 func main() {
 	var err error
 
-    // "" triggers dns-sd discovery
+	// "" triggers dns-sd discovery
 	client, err = envoycharts.New("")
 	if err != nil {
 		panic(err)
