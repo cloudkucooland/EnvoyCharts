@@ -16,7 +16,7 @@ var tzOffset int64 = 3600 * 6 // US/Central
 // Client is the primary handle for the EnvoyChart API
 type Client struct {
 	Ob      *objectbox.ObjectBox
-	Samples *model.EntryBox
+	Samples *model.SampleBox
 	Daily   *model.DailyBox
 	Envoy   *envoy.Envoy
 }
@@ -30,7 +30,7 @@ func New(host string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.Samples = model.BoxForEntry(c.Ob)
+	c.Samples = model.BoxForSample(c.Ob)
 	c.Daily = model.BoxForDaily(c.Ob)
 
 	// if host is unset, discovery happens
@@ -57,7 +57,7 @@ func database() (*objectbox.ObjectBox, error) {
 
 // Sample polls an envoy device and stores the production values into the database
 func (c *Client) Sample() error {
-	e := model.Entry{
+	e := model.Sample{
 		Date: time.Now().Unix(),
 	}
 
@@ -76,8 +76,8 @@ func (c *Client) Sample() error {
 
 	// use the ID to ensure each day has only one sample, updated throughout the day
 	d := model.Daily{}
-	d.DID = int64(math.Floor(float64(e.Date/86400)) * 86400)
-	d.Date = time.Unix(d.DID, 0)
+	d.Id = int64(math.Floor(float64(e.Date/86400)) * 86400)
+	d.Date = time.Unix(d.Id, 0)
 	d.ProductionkWh, d.ConsumptionkWh, _, err = c.Envoy.Today()
 	if _, err := c.Daily.Put(&d); err != nil {
 		fmt.Printf("could not update daily: %s\n", err)
@@ -88,9 +88,9 @@ func (c *Client) Sample() error {
 }
 
 // GetAll returns all values from the database, probably not useful for anything other than testing
-func (c *Client) GetAll() ([]*model.Entry, error) {
+func (c *Client) GetAll() ([]*model.Sample, error) {
 	query := c.Samples.Query(
-		model.Entry_.Date.OrderAsc(),
+		model.Sample_.Date.OrderAsc(),
 	)
 	entries, err := query.Find()
 	if err != nil {
@@ -114,10 +114,10 @@ func (c *Client) GetAllDaily() ([]*model.Daily, error) {
 }
 
 // GetPastDay gets the samples for the previous 24 hours
-func (c *Client) GetPastDay() ([]*model.Entry, error) {
+func (c *Client) GetPastDay() ([]*model.Sample, error) {
 	query := c.Samples.Query(
-		model.Entry_.Date.GreaterThan(time.Now().Unix()-86400),
-		model.Entry_.Date.OrderAsc(),
+		model.Sample_.Date.GreaterThan(time.Now().Unix()-86400),
+		model.Sample_.Date.OrderAsc(),
 	)
 	entries, err := query.Find()
 	if err != nil {
@@ -128,12 +128,12 @@ func (c *Client) GetPastDay() ([]*model.Entry, error) {
 }
 
 // GetDay returns all the samples for the day which contains the parameter (adjusted based on the tzOffset value)
-func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
+func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
 	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
 	dayStart := int64(math.Floor(float64(t.Unix()/86400))*86400) + tzOffset
 	var query = c.Samples.Query(
-		model.Entry_.Date.Between(dayStart, dayStart+86400),
-		model.Entry_.Date.OrderAsc(),
+		model.Sample_.Date.Between(dayStart, dayStart+86400),
+		model.Sample_.Date.OrderAsc(),
 	)
 
 	entries, err := query.Find()
@@ -145,14 +145,14 @@ func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
 }
 
 // GetDayRange gets all values between the start and end days
-func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Entry, error) {
+func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, error) {
 	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
 	dayStart := int64(math.Floor(float64(start.Unix()/86400))*86400) + tzOffset
 	dayEnd := int64(math.Floor(float64(end.Unix()/86400))*86400) + 86399 + tzOffset
 
 	var query = c.Samples.Query(
-		model.Entry_.Date.Between(dayStart, dayEnd),
-		model.Entry_.Date.OrderAsc(),
+		model.Sample_.Date.Between(dayStart, dayEnd),
+		model.Sample_.Date.OrderAsc(),
 	)
 	entries, err := query.Find()
 	if err != nil {

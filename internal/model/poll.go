@@ -8,8 +8,8 @@ import (
 
 // Entry is an individual system sample, the basic unit stored in the database
 
-// next schema change, convert Date to time.Time `objectbox:"date"`
-type Entry struct {
+// next schema change convert Date to time.Time `objectbox:"date"`
+type Sample struct {
 	Id           int64 `objectbox:"id"`
 	Date         int64
 	ProductionW  float64
@@ -18,7 +18,7 @@ type Entry struct {
 }
 
 type Daily struct {
-	DID            int64     `objectbox:"id(assignable)","unique"`
+	Id            int64     `objectbox:"id(assignable)","unique"`
 	Date           time.Time `objectbox:"date"`
 	ProductionkWh  float64
 	ConsumptionkWh float64
