@@ -381,19 +381,13 @@ var DailyBinding = daily_EntityInfo{
 // Daily_ contains type-based Property helpers to facilitate some common operations such as Queries.
 var Daily_ = struct {
 	Date           *objectbox.PropertyInt64
-	ProductionkWn  *objectbox.PropertyFloat64
 	ConsumptionkWh *objectbox.PropertyFloat64
 	DID            *objectbox.PropertyInt64
+	ProductionkWh  *objectbox.PropertyFloat64
 }{
 	Date: &objectbox.PropertyInt64{
 		BaseProperty: &objectbox.BaseProperty{
 			Id:     2,
-			Entity: &DailyBinding.Entity,
-		},
-	},
-	ProductionkWn: &objectbox.PropertyFloat64{
-		BaseProperty: &objectbox.BaseProperty{
-			Id:     3,
 			Entity: &DailyBinding.Entity,
 		},
 	},
@@ -409,6 +403,12 @@ var Daily_ = struct {
 			Entity: &DailyBinding.Entity,
 		},
 	},
+	ProductionkWh: &objectbox.PropertyFloat64{
+		BaseProperty: &objectbox.BaseProperty{
+			Id:     6,
+			Entity: &DailyBinding.Entity,
+		},
+	},
 }
 
 // GeneratorVersion is called by ObjectBox to verify the compatibility of the generator used to generate this code
@@ -420,11 +420,11 @@ func (daily_EntityInfo) GeneratorVersion() int {
 func (daily_EntityInfo) AddToModel(model *objectbox.Model) {
 	model.Entity("Daily", 2, 6434397660819005171)
 	model.Property("Date", 10, 2, 5037411518101750911)
-	model.Property("ProductionkWn", 8, 3, 1151999639328049543)
 	model.Property("ConsumptionkWh", 8, 4, 3504309473206441362)
 	model.Property("DID", 6, 5, 1048918584752691851)
 	model.PropertyFlags(129)
-	model.EntityLastPropertyId(5, 1048918584752691851)
+	model.Property("ProductionkWh", 8, 6, 3218371933083291281)
+	model.EntityLastPropertyId(6, 3218371933083291281)
 }
 
 // GetId is called by ObjectBox during Put operations to check for existing ID on an object
@@ -456,10 +456,10 @@ func (daily_EntityInfo) Flatten(object interface{}, fbb *flatbuffers.Builder, id
 	}
 
 	// build the FlatBuffers object
-	fbb.StartObject(5)
+	fbb.StartObject(6)
 	fbutils.SetUint64Slot(fbb, 4, id)
 	fbutils.SetInt64Slot(fbb, 1, propDate)
-	fbutils.SetFloat64Slot(fbb, 2, obj.ProductionkWn)
+	fbutils.SetFloat64Slot(fbb, 5, obj.ProductionkWh)
 	fbutils.SetFloat64Slot(fbb, 3, obj.ConsumptionkWh)
 	return nil
 }
@@ -485,7 +485,7 @@ func (daily_EntityInfo) Load(ob *objectbox.ObjectBox, bytes []byte) (interface{}
 	return &Daily{
 		DID:            propDID,
 		Date:           propDate,
-		ProductionkWn:  fbutils.GetFloat64Slot(table, 8),
+		ProductionkWh:  fbutils.GetFloat64Slot(table, 14),
 		ConsumptionkWh: fbutils.GetFloat64Slot(table, 10),
 	}, nil
 }

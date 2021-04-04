@@ -10,7 +10,7 @@ import (
 
 // next schema change, convert Date to time.Time `objectbox:"date"`
 type Entry struct {
-	Id           int64
+	Id           int64 `objectbox:"id"`
 	Date         int64
 	ProductionW  float64
 	ConsumptionW float64
@@ -20,6 +20,6 @@ type Entry struct {
 type Daily struct {
 	DID            int64     `objectbox:"id(assignable)","unique"`
 	Date           time.Time `objectbox:"date"`
-	ProductionkWn  float64
+	ProductionkWh  float64
 	ConsumptionkWh float64
 }

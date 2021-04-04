@@ -49,6 +49,12 @@ func webservice() {
 func handler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
+	chart, ok := r.Form["c"]
+	if ok && chart[0] == "daily" {
+		dailyChart(w)
+		return
+	}
+
 	date, ok := r.Form["d"]
 	if !ok {
 		// start day not set, just show the past 24 hours
@@ -105,6 +111,14 @@ func pastDay(w io.Writer) {
 		panic(err)
 	}
 	envoycharts.Linechart(w, samples, "Solar Production for Past 24 hours")
+}
+
+func dailyChart(w io.Writer) {
+	ds, err := client.GetAllDaily()
+	if err != nil {
+		panic(err)
+	}
+	envoycharts.LinechartDaily(w, ds, "Daily Totals")
 }
 
 func poller() {

@@ -61,6 +61,7 @@ func (c *Client) Sample() error {
 		Date: time.Now().Unix(),
 	}
 
+	// append the new sample to the primary table
 	var err error
 	e.ProductionW, e.ConsumptionW, e.NetW, err = c.Envoy.Now()
 	if err != nil {
@@ -73,22 +74,25 @@ func (c *Client) Sample() error {
 		return err
 	}
 
-	// overwrite the daily sample
+	// use the ID to ensure each day has only one sample, updated throughout the day
 	d := model.Daily{}
-	d.DID = int64(math.Floor(float64(e.Date/86400))*86400) + tzOffset
+	d.DID = int64(math.Floor(float64(e.Date/86400)) * 86400)
 	d.Date = time.Unix(d.DID, 0)
-	d.ProductionkWn, d.ConsumptionkWh, _, err = c.Envoy.Today()
+	d.ProductionkWh, d.ConsumptionkWh, _, err = c.Envoy.Today()
 	if _, err := c.Daily.Put(&d); err != nil {
 		fmt.Printf("could not update daily: %s\n", err)
 		return err
 	}
-
+	fmt.Printf("%+v\n%+v\n", e, d)
 	return nil
 }
 
 // GetAll returns all values from the database, probably not useful for anything other than testing
 func (c *Client) GetAll() ([]*model.Entry, error) {
-	entries, err := c.Samples.GetAll()
+	query := c.Samples.Query(
+		model.Entry_.Date.OrderAsc(),
+	)
+	entries, err := query.Find()
 	if err != nil {
 		fmt.Println(err)
 		return entries, err
@@ -96,10 +100,24 @@ func (c *Client) GetAll() ([]*model.Entry, error) {
 	return entries, nil
 }
 
+// GetAllDaily gets every entry from the daily table
+func (c *Client) GetAllDaily() ([]*model.Daily, error) {
+	query := c.Daily.Query(
+		model.Daily_.Date.OrderAsc(),
+	)
+	d, err := query.Find()
+	if err != nil {
+		fmt.Println(err)
+		return d, err
+	}
+	return d, nil
+}
+
 // GetPastDay gets the samples for the previous 24 hours
 func (c *Client) GetPastDay() ([]*model.Entry, error) {
-	var query = c.Samples.Query(
-		model.Entry_.Date.GreaterThan(time.Now().Unix() - 86400),
+	query := c.Samples.Query(
+		model.Entry_.Date.GreaterThan(time.Now().Unix()-86400),
+		model.Entry_.Date.OrderAsc(),
 	)
 	entries, err := query.Find()
 	if err != nil {
@@ -111,17 +129,13 @@ func (c *Client) GetPastDay() ([]*model.Entry, error) {
 
 // GetDay returns all the samples for the day which contains the parameter (adjusted based on the tzOffset value)
 func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
-	var maxAlias = objectbox.Alias("max")
-	var minAlias = objectbox.Alias("min")
-	var query = c.Samples.Query(
-		model.Entry_.Date.GreaterThan(0).As(maxAlias),
-		model.Entry_.Date.LessThan(0).As(minAlias),
-	)
-
 	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
 	dayStart := int64(math.Floor(float64(t.Unix()/86400))*86400) + tzOffset
-	query.SetInt64Params(maxAlias, dayStart)
-	query.SetInt64Params(minAlias, dayStart+86400)
+	var query = c.Samples.Query(
+		model.Entry_.Date.Between(dayStart, dayStart+86400),
+		model.Entry_.Date.OrderAsc(),
+	)
+
 	entries, err := query.Find()
 	if err != nil {
 		fmt.Println(err)
@@ -132,18 +146,14 @@ func (c *Client) GetDay(t time.Time) ([]*model.Entry, error) {
 
 // GetDayRange gets all values between the start and end days
 func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Entry, error) {
-	var maxAlias = objectbox.Alias("max")
-	var minAlias = objectbox.Alias("min")
-	var query = c.Samples.Query(
-		model.Entry_.Date.GreaterThan(0).As(maxAlias),
-		model.Entry_.Date.LessThan(0).As(minAlias),
-	)
-
 	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
 	dayStart := int64(math.Floor(float64(start.Unix()/86400))*86400) + tzOffset
 	dayEnd := int64(math.Floor(float64(end.Unix()/86400))*86400) + 86399 + tzOffset
-	query.SetInt64Params(maxAlias, dayStart)
-	query.SetInt64Params(minAlias, dayEnd)
+
+	var query = c.Samples.Query(
+		model.Entry_.Date.Between(dayStart, dayEnd),
+		model.Entry_.Date.OrderAsc(),
+	)
 	entries, err := query.Find()
 	if err != nil {
 		fmt.Println(err)
