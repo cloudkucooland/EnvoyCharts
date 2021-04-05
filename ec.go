@@ -2,7 +2,7 @@ package envoycharts
 
 import (
 	"fmt"
-	"math"
+	// "math"
 	"time"
 
 	"github.com/cloudkucooland/EnvoyCharts/internal/model"
@@ -33,7 +33,7 @@ func New(host string) (*Client, error) {
 	c.Samples = model.BoxForSample(c.Ob)
 	c.Daily = model.BoxForDaily(c.Ob)
 
-	// set the timezone...
+	// set the timezone... should just use the OS's settings
 	tz, err = time.LoadLocation("America/Chicago")
 	if err != nil {
 		panic(err)
@@ -63,8 +63,9 @@ func database() (*objectbox.ObjectBox, error) {
 
 // Sample polls an envoy device and stores the production values into the database
 func (c *Client) Sample() error {
+	t := time.Now().In(tz)
 	e := model.Sample{
-		Date: time.Now().Unix(),
+		Date: t.Unix(),
 	}
 
 	// append the new sample to the primary table
@@ -81,8 +82,9 @@ func (c *Client) Sample() error {
 	}
 
 	// use the ID to ensure each day has only one sample, updated throughout the day
-	d := model.Daily{}
-	d.Id = int64(math.Floor(float64(e.Date/86400)) * 86400)
+	d := model.Daily{
+		Id: dayStart(t),
+	}
 	d.Date = time.Unix(d.Id, 0).In(tz)
 	d.ProductionkWh, d.ConsumptionkWh, _, err = c.Envoy.Today()
 	if _, err := c.Daily.Put(&d); err != nil {
@@ -136,8 +138,10 @@ func (c *Client) GetPastDay() ([]*model.Sample, error) {
 // GetDay returns all the samples for the day which contains the parameter
 func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
 	ds := dayStart(t)
+	de := dayEnd(t)
+
 	var query = c.Samples.Query(
-		model.Sample_.Date.Between(ds, ds+86400),
+		model.Sample_.Date.Between(ds, de),
 		model.Sample_.Date.OrderAsc(),
 	)
 
@@ -152,7 +156,7 @@ func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
 // GetDayRange gets all values between the start and end days
 func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, error) {
 	ds := dayStart(start)
-	de := dayStart(end) + 86399
+	de := dayEnd(end)
 
 	var query = c.Samples.Query(
 		model.Sample_.Date.Between(ds, de),
@@ -169,5 +173,11 @@ func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, e
 func dayStart(t time.Time) int64 {
 	x := t.In(tz)
 	y := time.Date(x.Year(), x.Month(), x.Day(), 0, 0, 0, 0, tz)
+	return y.Unix()
+}
+
+func dayEnd(t time.Time) int64 {
+	x := t.In(tz)
+	y := time.Date(x.Year(), x.Month(), x.Day(), 23, 59, 59, 9999, tz)
 	return y.Unix()
 }
