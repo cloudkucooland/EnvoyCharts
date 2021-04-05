@@ -11,7 +11,7 @@ import (
 )
 
 var dbdir = "/var/log/envoy"
-var tzOffset int64 = 3600 * 6 // US/Central
+var tz *time.Location
 
 // Client is the primary handle for the EnvoyChart API
 type Client struct {
@@ -32,6 +32,12 @@ func New(host string) (*Client, error) {
 	}
 	c.Samples = model.BoxForSample(c.Ob)
 	c.Daily = model.BoxForDaily(c.Ob)
+
+	// set the timezone...
+	tz, err = time.LoadLocation("America/Chicago")
+	if err != nil {
+		panic(err)
+	}
 
 	// if host is unset, discovery happens
 	c.Envoy = envoy.New(host)
@@ -77,7 +83,7 @@ func (c *Client) Sample() error {
 	// use the ID to ensure each day has only one sample, updated throughout the day
 	d := model.Daily{}
 	d.Id = int64(math.Floor(float64(e.Date/86400)) * 86400)
-	d.Date = time.Unix(d.Id, 0)
+	d.Date = time.Unix(d.Id, 0).In(tz)
 	d.ProductionkWh, d.ConsumptionkWh, _, err = c.Envoy.Today()
 	if _, err := c.Daily.Put(&d); err != nil {
 		fmt.Printf("could not update daily: %s\n", err)
@@ -127,12 +133,11 @@ func (c *Client) GetPastDay() ([]*model.Sample, error) {
 	return entries, nil
 }
 
-// GetDay returns all the samples for the day which contains the parameter (adjusted based on the tzOffset value)
+// GetDay returns all the samples for the day which contains the parameter
 func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
-	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
-	dayStart := int64(math.Floor(float64(t.Unix()/86400))*86400) + tzOffset
+	ds := dayStart(t)
 	var query = c.Samples.Query(
-		model.Sample_.Date.Between(dayStart, dayStart+86400),
+		model.Sample_.Date.Between(ds, ds+86400),
 		model.Sample_.Date.OrderAsc(),
 	)
 
@@ -146,12 +151,11 @@ func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
 
 // GetDayRange gets all values between the start and end days
 func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, error) {
-	// there is probably a more Go-native way of doing this, but since we are all UNIX timestamps, this is fine
-	dayStart := int64(math.Floor(float64(start.Unix()/86400))*86400) + tzOffset
-	dayEnd := int64(math.Floor(float64(end.Unix()/86400))*86400) + 86399 + tzOffset
+	ds := dayStart(start)
+	de := dayStart(end) + 86399
 
 	var query = c.Samples.Query(
-		model.Sample_.Date.Between(dayStart, dayEnd),
+		model.Sample_.Date.Between(ds, de),
 		model.Sample_.Date.OrderAsc(),
 	)
 	entries, err := query.Find()
@@ -160,4 +164,10 @@ func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, e
 		return entries, err
 	}
 	return entries, nil
+}
+
+func dayStart(t time.Time) int64 {
+	x := t.In(tz)
+	y := time.Date(x.Year(), x.Month(), x.Day(), 0, 0, 0, 0, tz)
+	return y.Unix()
 }

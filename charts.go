@@ -32,7 +32,7 @@ func Barchart(w io.Writer, samples []*model.Sample, title string) {
 	dates := make([]string, 0)
 
 	for _, v := range samples {
-		fu := time.Unix(v.Date, 0)
+		fu := time.Unix(v.Date, 0).In(tz)
 		t := fu.Format("2006/01/02 15:04:05")
 
 		dates = append(dates, t)
@@ -71,7 +71,7 @@ func Linechart(w io.Writer, samples []*model.Sample, title string) {
 	dates := make([]string, 0)
 
 	for _, v := range samples {
-		fu := time.Unix(v.Date, 0)
+		fu := time.Unix(v.Date, 0).In(tz)
 		t := fu.Format("2006/01/02 15:04:05")
 
 		dates = append(dates, t)
@@ -116,7 +116,7 @@ func LinechartDaily(w io.Writer, samples []*model.Daily, title string) {
 	dates := make([]string, 0)
 
 	for _, v := range samples {
-		t := v.Date.Format("2006/01/02")
+		t := v.Date.In(tz).Format("2006/01/02")
 
 		dates = append(dates, t)
 		prod = append(prod, opts.LineData{Value: v.ProductionkWh})
