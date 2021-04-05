@@ -11,7 +11,7 @@ import (
 )
 
 // Barchart takes a set of samples, and a title and writes the barchart to the specified writer
-func Barchart(w io.Writer, samples []*model.Sample, title string) {
+func Barchart(w io.Writer, samples []*model.Sample, title string, tz *time.Location) {
 	bar := charts.NewBar()
 	// use our custom template
 	useECTemplates()
@@ -49,7 +49,7 @@ func Barchart(w io.Writer, samples []*model.Sample, title string) {
 }
 
 // Linechart takes a set of samples, and a title and writes the linechart to the specified writer
-func Linechart(w io.Writer, samples []*model.Sample, title string) {
+func Linechart(w io.Writer, samples []*model.Sample, title string, tz *time.Location) {
 	line := charts.NewLine()
 	// use our custom template
 	useECTemplates()
@@ -94,7 +94,7 @@ func Linechart(w io.Writer, samples []*model.Sample, title string) {
 }
 
 // LinechartDaily takes a set of daily values, and a title and writes the linechart to the specified writer
-func LinechartDaily(w io.Writer, samples []*model.Daily, title string) {
+func LinechartDaily(w io.Writer, samples []*model.Daily, title string, tz *time.Location) {
 	line := charts.NewLine()
 	// use our custom template
 	useECTemplates()

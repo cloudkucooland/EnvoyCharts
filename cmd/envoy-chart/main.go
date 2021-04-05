@@ -61,7 +61,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		pastDay(w)
 		return
 	}
-	start, err := time.Parse("2006/01/02", date[0])
+	start, err := time.ParseInLocation("2006/01/02", date[0], client.TZ)
 	if err != nil {
 		fmt.Println(err)
 		// start day not valid, show past 24h
@@ -75,7 +75,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		specificDay(w, start)
 		return
 	}
-	end, err := time.Parse("2006/01/02", enddate[0])
+	end, err := time.ParseInLocation("2006/01/02", enddate[0], client.TZ)
 	if err != nil {
 		fmt.Println(err)
 		// start valid, but end invalid
@@ -93,7 +93,7 @@ func specificDay(w io.Writer, t time.Time) {
 		panic(err)
 	}
 	title := fmt.Sprintf("Solar Production for %s", t.Format("2006/01/02"))
-	envoycharts.Linechart(w, samples, title)
+	envoycharts.Linechart(w, samples, title, client.TZ)
 }
 
 func dayRange(w io.Writer, start, end time.Time) {
@@ -102,7 +102,7 @@ func dayRange(w io.Writer, start, end time.Time) {
 		panic(err)
 	}
 	title := fmt.Sprintf("Solar Production %s - %s", start.Format("2006/01/02"), end.Format("2006/01/02"))
-	envoycharts.Linechart(w, samples, title)
+	envoycharts.Linechart(w, samples, title, client.TZ)
 }
 
 func pastDay(w io.Writer) {
@@ -110,7 +110,7 @@ func pastDay(w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
-	envoycharts.Linechart(w, samples, "Solar Production for Past 24 hours")
+	envoycharts.Linechart(w, samples, "Solar Production for Past 24 hours", client.TZ)
 }
 
 func dailyChart(w io.Writer) {
@@ -118,7 +118,7 @@ func dailyChart(w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
-	envoycharts.LinechartDaily(w, ds, "Daily Totals")
+	envoycharts.LinechartDaily(w, ds, "Daily Totals", client.TZ)
 }
 
 func poller() {

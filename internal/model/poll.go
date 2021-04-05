@@ -18,7 +18,7 @@ type Sample struct {
 }
 
 type Daily struct {
-	Id            int64     `objectbox:"id(assignable)","unique"`
+	Id             int64     `objectbox:"id(assignable)","unique"`
 	Date           time.Time `objectbox:"date"`
 	ProductionkWh  float64
 	ConsumptionkWh float64
