@@ -122,9 +122,16 @@ func dailyChart(w io.Writer) {
 }
 
 func poller() {
-	ticker := time.Tick(600 * time.Second)
+    fmt.Println("first poll")
+	err := client.Sample()
+	if err != nil {
+		fmt.Println(err.Error())
+    }
+
+	ticker := time.Tick(5 * time.Minute)
 
 	for range ticker {
+        fmt.Println("polling...")
 		err := client.Sample()
 		if err != nil {
 			fmt.Println(err.Error())
