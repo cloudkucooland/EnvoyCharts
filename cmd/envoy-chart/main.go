@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,8 @@ var client *envoycharts.Client
 func main() {
 	var err error
 
+	ctx, shutdownpoller := context.WithCancel(context.Background())
+
 	// "" triggers dns-sd discovery
 	client, err = envoycharts.New("")
 	if err != nil {
@@ -24,25 +27,77 @@ func main() {
 	}
 
 	// start the poller to query the envoy
-	go poller()
+	go poller(ctx)
 
 	// start the http service
-	go webservice()
+	srv := &http.Server{Addr: ":8081"}
+	go webservice(srv)
 
 	// listen for a shutdown signal
-	sigch := make(chan os.Signal, 3)
+	sigch := make(chan os.Signal, 1)
 	signal.Notify(sigch, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
+	sig := <-sigch // wait here until an OS signal is sent
 
-	sig := <-sigch
 	fmt.Println("shutting down", sig)
+
+	// shutdown the webservice
+	webshutdown, cancelwebshutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := srv.Shutdown(webshutdown); err != nil {
+		fmt.Println(err.Error())
+		cancelwebshutdown()
+	} else {
+		<-webshutdown.Done()
+	}
+
+	// now shutdown the poller
+	shutdownpoller()
+	// final cleanup
 	client.Close()
 }
 
-func webservice() {
-	http.HandleFunc("/", handler)
-	err := http.ListenAndServe(":8081", nil)
+// the IP address of the envoy can change over time,
+// this tries to re-discover and keep polling if that happens
+func poller(ctx context.Context) {
+	defer func() {
+		fmt.Println("shutting down poller")
+	}()
+
+	ticker := time.Tick(5 * time.Minute)
+
+	err := client.Sample()
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker:
+			if err := client.Sample(); err != nil {
+				fmt.Println(err.Error())
+			RESTART:
+				cc, err := envoycharts.New("")
+				if err != nil {
+					fmt.Println(err.Error())
+					time.Sleep(1 * time.Minute)
+					goto RESTART
+				}
+				client.Close()
+				client = cc
+			}
+		}
+	}
+}
+
+func webservice(srv *http.Server) {
+	sm := http.NewServeMux()
+	sm.HandleFunc("/", handler)
+
+	srv.Handler = sm
+	if err := srv.ListenAndServe(); err != nil {
+		fmt.Println(err.Error())
 	}
 }
 
@@ -90,7 +145,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func specificDay(w io.Writer, t time.Time) {
 	samples, err := client.GetDay(t)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	title := fmt.Sprintf("Solar Production for %s", t.Format("2006/01/02"))
 	envoycharts.Linechart(w, samples, title, client.TZ)
@@ -99,7 +155,8 @@ func specificDay(w io.Writer, t time.Time) {
 func dayRange(w io.Writer, start, end time.Time) {
 	samples, err := client.GetDayRange(start, end)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	title := fmt.Sprintf("Solar Production %s - %s", start.Format("2006/01/02"), end.Format("2006/01/02"))
 	envoycharts.Linechart(w, samples, title, client.TZ)
@@ -108,7 +165,8 @@ func dayRange(w io.Writer, start, end time.Time) {
 func pastDay(w io.Writer) {
 	samples, err := client.GetPastDay()
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	envoycharts.Linechart(w, samples, "Solar Production for Past 24 hours", client.TZ)
 }
@@ -116,27 +174,8 @@ func pastDay(w io.Writer) {
 func dailyChart(w io.Writer) {
 	ds, err := client.GetAllDaily()
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return
 	}
 	envoycharts.LinechartDaily(w, ds, "Daily Totals", client.TZ)
-}
-
-func poller() {
-    fmt.Println("first poll")
-	err := client.Sample()
-	if err != nil {
-		fmt.Println(err.Error())
-    }
-
-	ticker := time.Tick(5 * time.Minute)
-
-	for range ticker {
-        fmt.Println("polling...")
-		err := client.Sample()
-		if err != nil {
-			fmt.Println(err.Error())
-			break
-		}
-	}
-	fmt.Println("shutting down poller")
 }
