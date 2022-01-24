@@ -4,14 +4,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/cloudkucooland/EnvoyCharts/internal/model"
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
 )
 
 // Barchart takes a set of samples, and a title and writes the barchart to the specified writer
-func Barchart(w io.Writer, samples []*model.Sample, title string, tz *time.Location) {
+func Barchart(w io.Writer, samples []*Sample, title string, tz *time.Location) {
 	bar := charts.NewBar()
 	// use our custom template
 	useECTemplates()
@@ -32,7 +31,7 @@ func Barchart(w io.Writer, samples []*model.Sample, title string, tz *time.Locat
 	dates := make([]string, 0)
 
 	for _, v := range samples {
-		fu := time.Unix(v.Date, 0).In(tz)
+		fu := v.Date.In(tz)
 		t := fu.Format("2006/01/02 15:04:05")
 
 		dates = append(dates, t)
@@ -49,7 +48,7 @@ func Barchart(w io.Writer, samples []*model.Sample, title string, tz *time.Locat
 }
 
 // Linechart takes a set of samples, and a title and writes the linechart to the specified writer
-func Linechart(w io.Writer, samples []*model.Sample, title string, tz *time.Location) {
+func Linechart(w io.Writer, samples []*Sample, title string, tz *time.Location) {
 	line := charts.NewLine()
 	// use our custom template
 	useECTemplates()
@@ -71,7 +70,7 @@ func Linechart(w io.Writer, samples []*model.Sample, title string, tz *time.Loca
 	dates := make([]string, 0)
 
 	for _, v := range samples {
-		fu := time.Unix(v.Date, 0).In(tz)
+		fu := v.Date.In(tz)
 		t := fu.Format("2006/01/02 15:04:05")
 
 		dates = append(dates, t)
@@ -94,7 +93,7 @@ func Linechart(w io.Writer, samples []*model.Sample, title string, tz *time.Loca
 }
 
 // LinechartDaily takes a set of daily values, and a title and writes the linechart to the specified writer
-func LinechartDaily(w io.Writer, samples []*model.Daily, title string, tz *time.Location) {
+func LinechartDaily(w io.Writer, samples []*Daily, title string, tz *time.Location) {
 	line := charts.NewLine()
 	// use our custom template
 	useECTemplates()
