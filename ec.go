@@ -1,23 +1,23 @@
 package envoycharts
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	// "math"
+	"path"
 	"time"
 
-	"github.com/cloudkucooland/EnvoyCharts/internal/model"
 	"github.com/cloudkucooland/go-envoy"
-	"github.com/objectbox/objectbox-go/objectbox"
+	_ "github.com/mattn/go-sqlite3" // sqlite3
 )
 
 // Client is the primary handle for the EnvoyChart API
 type Client struct {
-	Ob      *objectbox.ObjectBox
-	Samples *model.SampleBox
-	Daily   *model.DailyBox
-	Envoy   *envoy.Envoy
-	TZ      *time.Location
-	dbdir   string
+	DB    *sql.DB
+	Envoy *envoy.Envoy
+	TZ    *time.Location
+	dbdir string
 }
 
 // New creates a new Client
@@ -27,12 +27,21 @@ func New(host string) (*Client, error) {
 	}
 	var err error
 
-	err = c.database()
+	c.DB, err = sql.Open("sqlite3", path.Join(c.dbdir, "ec.db"))
 	if err != nil {
+		log.Panic(err)
+	}
+
+	setup := `
+	create table if not exists samples (id integer not null primary key, unixtime integer not null, production real not null, consumption real not null, net real not null);
+	create table if not exists daily (id integer not null primary key, unixtime integer not null, production real not null, consumption real not null);
+	`
+	if _, err = c.DB.Exec(setup); err != nil {
+		log.Printf("%q: %s\n", err, setup)
 		return nil, err
 	}
 
-	if err := c.SetLocation("America/Chicago"); err != nil {
+	if c.TZ, err = time.LoadLocation("America/Chicago"); err != nil {
 		return nil, err
 	}
 
@@ -41,38 +50,15 @@ func New(host string) (*Client, error) {
 	return &c, nil
 }
 
-func (c *Client) SetLocation(l string) error {
-	var err error
-	c.TZ, err = time.LoadLocation(l)
-	return err
-}
-
-// Close shuts down a client
 func (c *Client) Close() {
-	c.Ob.Close()
-}
-
-func (c *Client) database() error {
-	builder := objectbox.NewBuilder()
-	builder.Model(model.ObjectBoxModel())
-	builder.Directory(c.dbdir)
-
-	var err error
-	c.Ob, err = builder.Build()
-	if err != nil {
-		return err
-	}
-
-	c.Samples = model.BoxForSample(c.Ob)
-	c.Daily = model.BoxForDaily(c.Ob)
-	return nil
+	c.DB.Close()
 }
 
 // Sample polls an envoy device and stores the production values into the database
 func (c *Client) Sample() error {
 	t := time.Now().In(c.TZ)
-	e := model.Sample{
-		Date: t.Unix(),
+	e := &Sample{
+		Date: t,
 	}
 
 	// append the new sample to the primary table
@@ -83,108 +69,124 @@ func (c *Client) Sample() error {
 		return err
 	}
 
-	if _, err := c.Samples.Put(&e); err != nil {
+	if err := c.PutSample(e); err != nil {
 		fmt.Printf("could not insert sample: %s\n", err)
 		return err
 	}
 
 	// use the ID to ensure each day has only one sample, updated throughout the day
-	d := model.Daily{
-		Id: c.dayStart(t),
+	d := &Daily{
+		Id: c.dayStart(t).Unix(),
 	}
 	d.Date = time.Unix(d.Id, 0).In(c.TZ)
+
 	d.ProductionkWh, d.ConsumptionkWh, _, err = c.Envoy.Today()
-	if _, err := c.Daily.Put(&d); err != nil {
+	if err != nil {
+		fmt.Printf("unable to poll")
+		return err
+	}
+	if err := c.PutDaily(d); err != nil {
 		fmt.Printf("could not update daily: %s\n", err)
 		return err
 	}
-	fmt.Printf("%+v\n%+v\n", e, d)
+	// fmt.Printf("%+v\n%+v\n", e, d)
 	return nil
 }
 
 // GetAll returns all values from the database, probably not useful for anything other than testing
-func (c *Client) GetAll() ([]*model.Sample, error) {
-	query := c.Samples.Query(
-		model.Sample_.Date.OrderAsc(),
-	)
-	entries, err := query.Find()
-	if err != nil {
-		fmt.Println(err)
-		return entries, err
-	}
+func (c *Client) GetAllSamples() ([]*Sample, error) {
+	entries := make([]*Sample, 0)
+
+	// do some work
+
 	return entries, nil
 }
 
 // GetAllDaily gets every entry from the daily table
-func (c *Client) GetAllDaily() ([]*model.Daily, error) {
-	query := c.Daily.Query(
-		model.Daily_.Date.OrderAsc(),
-	)
-	d, err := query.Find()
-	if err != nil {
-		fmt.Println(err)
-		return d, err
-	}
+func (c *Client) GetAllDaily() ([]*Daily, error) {
+	d := make([]*Daily, 0)
+
+	// do some work
+
 	return d, nil
 }
 
-// GetPastDay gets the samples for the previous 24 hours
-func (c *Client) GetPastDay() ([]*model.Sample, error) {
-	query := c.Samples.Query(
-		model.Sample_.Date.GreaterThan(time.Now().Unix()-86400),
-		model.Sample_.Date.OrderAsc(),
-	)
-	entries, err := query.Find()
-	if err != nil {
-		fmt.Println(err)
-		return entries, err
-	}
+func (c *Client) GetSamples(start, end time.Time) ([]*Sample, error) {
+	entries := make([]*Sample, 0)
 	return entries, nil
+}
+
+// GetPastDay gets the samples for the previous 24 hours
+// -- 24 hour window ending at Now()
+func (c *Client) GetPastDay() ([]*Sample, error) {
+	ds := time.Now().Add(0 - 86400*time.Second)
+	de := time.Now()
+	return c.GetSamples(ds, de)
 }
 
 // GetDay returns all the samples for the day which contains the parameter
-func (c *Client) GetDay(t time.Time) ([]*model.Sample, error) {
+// -- 24 hour window rounded to midnight
+func (c *Client) GetDay(t time.Time) ([]*Sample, error) {
 	ds := c.dayStart(t)
 	de := c.dayEnd(t)
-
-	var query = c.Samples.Query(
-		model.Sample_.Date.Between(ds, de),
-		model.Sample_.Date.OrderAsc(),
-	)
-
-	entries, err := query.Find()
-	if err != nil {
-		fmt.Println(err)
-		return entries, err
-	}
-	return entries, nil
+	return c.GetSamples(ds, de)
 }
 
-// GetDayRange gets all values between the start and end days
-func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*model.Sample, error) {
+// GetDayRange gets all values between the start and end days -- rounds to start/end of days
+func (c *Client) GetDayRange(start time.Time, end time.Time) ([]*Sample, error) {
 	ds := c.dayStart(start)
 	de := c.dayEnd(end)
-
-	var query = c.Samples.Query(
-		model.Sample_.Date.Between(ds, de),
-		model.Sample_.Date.OrderAsc(),
-	)
-	entries, err := query.Find()
-	if err != nil {
-		fmt.Println(err)
-		return entries, err
-	}
-	return entries, nil
+	return c.GetSamples(ds, de)
 }
 
-func (c *Client) dayStart(t time.Time) int64 {
+func (c *Client) dayStart(t time.Time) time.Time {
 	x := t.In(c.TZ)
 	y := time.Date(x.Year(), x.Month(), x.Day(), 0, 0, 0, 0, c.TZ)
-	return y.Unix()
+	return y
 }
 
-func (c *Client) dayEnd(t time.Time) int64 {
+func (c *Client) dayEnd(t time.Time) time.Time {
 	x := t.In(c.TZ)
 	y := time.Date(x.Year(), x.Month(), x.Day(), 23, 59, 59, 9999, c.TZ)
-	return y.Unix()
+	return y
+}
+
+func (c *Client) PutSample(s *Sample) error {
+	tx, err := c.DB.Begin()
+	if err != nil {
+		log.Println(err.Error())
+	}
+	stmt, err := tx.Prepare("insert into samples (id, unixtime, production, consumption, net) values(?, ?, ?, ?, ?)")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	defer stmt.Close()
+	if _, err = stmt.Exec(s.Date.Unix(), s.Date.Unix(), s.ProductionW, s.ConsumptionW, s.NetW); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	tx.Commit()
+
+	return nil
+}
+
+func (c *Client) PutDaily(d *Daily) error {
+	daystart := c.dayStart(d.Date).Unix()
+
+	tx, err := c.DB.Begin()
+	if err != nil {
+		log.Println(err.Error())
+	}
+	stmt, err := tx.Prepare("replace into daily (id, unixtime, production, consumption) values(?, ?, ?, ?)")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	defer stmt.Close()
+	if _, err = stmt.Exec(daystart, d.Date.Unix(), d.ProductionkWh, d.ConsumptionkWh); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	tx.Commit()
+
+	return nil
 }
