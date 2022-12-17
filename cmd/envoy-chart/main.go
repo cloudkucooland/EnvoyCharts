@@ -14,9 +14,11 @@ import (
 )
 
 var client *envoycharts.Client
+var pollrate time.Duration
 
 func main() {
 	var err error
+    pollrate = 5
 
 	ctx, shutdownpoller := context.WithCancel(context.Background())
 
@@ -34,14 +36,14 @@ func main() {
 	go webservice(srv)
 
 	// listen for a shutdown signal
-	sigch := make(chan os.Signal, 1)
-	signal.Notify(sigch, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
-	sig := <-sigch // wait here until an OS signal is sent
+	sigch := make(chan os.Signal, 3)
+	signal.Notify(sigch, syscall.SIGQUIT, syscall.SIGTERM)
+	<-sigch // wait here until an OS signal is sent
 
-	fmt.Println("shutting down", sig)
+	fmt.Println("shutting down")
 
 	// shutdown the webservice
-	webshutdown, cancelwebshutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	webshutdown, cancelwebshutdown := context.WithTimeout(ctx, 5*time.Second)
 	if err := srv.Shutdown(webshutdown); err != nil {
 		fmt.Println(err.Error())
 		cancelwebshutdown()
@@ -62,7 +64,8 @@ func poller(ctx context.Context) {
 		fmt.Println("shutting down poller")
 	}()
 
-	ticker := time.Tick(5 * time.Minute)
+	ticker := time.NewTicker(pollrate * time.Minute)
+	defer ticker.Stop()
 
 	err := client.Sample()
 	if err != nil {
@@ -71,22 +74,25 @@ func poller(ctx context.Context) {
 	}
 
 	for {
+		// fmt.Println("loop tick")
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker:
-			if err := client.Sample(); err != nil {
+		case <-ticker.C:
+            if !client.Configured() {
+				fmt.Println("not configuring, trying again")
+				client.Reset()
+                continue
+            }
+
+			// fmt.Println("starting sample")
+			if err = client.Sample(); err != nil {
 				fmt.Println(err.Error())
-			RESTART:
-				cc, err := envoycharts.New("")
-				if err != nil {
-					fmt.Println(err.Error())
-					time.Sleep(1 * time.Minute)
-					goto RESTART
-				}
-				client.Close()
-				client = cc
+				fmt.Println("reseting client")
+                client.Reset()
+                continue
 			}
+			// fmt.Println("sample complete")
 		}
 	}
 }

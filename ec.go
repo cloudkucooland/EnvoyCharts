@@ -51,14 +51,28 @@ func New(host string) (*Client, error) {
 }
 
 func (c *Client) Close() {
+    c.Envoy.Close()
 	c.DB.Close()
+}
+
+func (c *Client) Reset() error {
+    err := c.Envoy.Rediscover()
+	if err != nil {
+        log.Println(err.Error())
+    }
+
+    return err
+}
+
+func (c *Client) Configured() bool {
+    return c.Envoy.Host() != ""
 }
 
 // Sample polls an envoy device and stores the production values into the database
 func (c *Client) Sample() error {
-	t := time.Now().In(c.TZ)
+	// t := time.Now().In(c.TZ)
 	e := &Sample{
-		Date: t,
+		Date: time.Now().In(c.TZ),
 	}
 
 	// append the new sample to the primary table
@@ -69,14 +83,14 @@ func (c *Client) Sample() error {
 		return err
 	}
 
-	if err := c.PutSample(e); err != nil {
+	if err = c.PutSample(e); err != nil {
 		fmt.Printf("could not insert sample: %s\n", err)
 		return err
 	}
 
 	// use the ID to ensure each day has only one sample, updated throughout the day
 	d := &Daily{
-		Id: c.dayStart(t).Unix(),
+		Id: c.dayStart(e.Date).Unix(),
 	}
 	d.Date = time.Unix(d.Id, 0).In(c.TZ)
 
@@ -85,11 +99,11 @@ func (c *Client) Sample() error {
 		fmt.Printf("unable to poll")
 		return err
 	}
-	if err := c.PutDaily(d); err != nil {
+	if err = c.PutDaily(d); err != nil {
 		fmt.Printf("could not update daily: %s\n", err)
 		return err
 	}
-	// fmt.Printf("%+v\n%+v\n", e, d)
+	fmt.Printf("%+v\n%+v\n", e, d)
 	return nil
 }
 
@@ -97,7 +111,21 @@ func (c *Client) Sample() error {
 func (c *Client) GetAllSamples() ([]*Sample, error) {
 	entries := make([]*Sample, 0)
 
-	// do some work
+	rows, err := c.DB.Query("select id, unixtime, production, consumption, net from samples")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		e := Sample{}
+
+		if err := rows.Scan(&e.Id, &e.Date, &e.ProductionW, &e.ConsumptionW, &e.NetW); err != nil {
+			log.Println(err.Error())
+			continue
+		}
+
+		entries = append(entries, &e)
+	}
 
 	return entries, nil
 }
@@ -106,13 +134,51 @@ func (c *Client) GetAllSamples() ([]*Sample, error) {
 func (c *Client) GetAllDaily() ([]*Daily, error) {
 	d := make([]*Daily, 0)
 
-	// do some work
+	//stmt, err := tx.Prepare("replace into daily (id, unixtime, production, consumption) values(?, ?, ?, ?)")
+	rows, err := c.DB.Query("select id, unixtime, production, consumption from daily")
+	if err != nil {
+		log.Println(err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		e := Daily{}
+		var t int64
+
+		if err := rows.Scan(&e.Id, &t, &e.ProductionkWh, &e.ConsumptionkWh); err != nil {
+			log.Println(err.Error())
+			continue
+		}
+
+		e.Date = time.Unix(t, 0)
+
+		d = append(d, &e)
+	}
 
 	return d, nil
 }
 
 func (c *Client) GetSamples(start, end time.Time) ([]*Sample, error) {
 	entries := make([]*Sample, 0)
+
+	rows, err := c.DB.Query("select id, unixtime, production, consumption, net from samples WHERE unixtime > ? AND unixtime < ?", start.Unix(), end.Unix()) // WHERE ....
+	if err != nil {
+		log.Println(err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t int64
+		e := Sample{}
+
+		if err := rows.Scan(&e.Id, &t, &e.ProductionW, &e.ConsumptionW, &e.NetW); err != nil {
+			log.Println(err.Error())
+			continue
+		}
+
+		e.Date = time.Unix(t, 0)
+
+		entries = append(entries, &e)
+	}
+
 	return entries, nil
 }
 
