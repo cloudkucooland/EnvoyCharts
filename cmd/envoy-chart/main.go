@@ -18,7 +18,7 @@ var pollrate time.Duration
 
 func main() {
 	var err error
-    pollrate = 5
+	pollrate = 5
 
 	ctx, shutdownpoller := context.WithCancel(context.Background())
 
@@ -79,18 +79,18 @@ func poller(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-            if !client.Configured() {
+			if !client.Configured() {
 				fmt.Println("not configuring, trying again")
 				client.Reset()
-                continue
-            }
+				continue
+			}
 
 			// fmt.Println("starting sample")
 			if err = client.Sample(); err != nil {
 				fmt.Println(err.Error())
 				fmt.Println("reseting client")
-                client.Reset()
-                continue
+				client.Reset()
+				continue
 			}
 			// fmt.Println("sample complete")
 		}

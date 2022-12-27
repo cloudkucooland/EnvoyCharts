@@ -51,21 +51,21 @@ func New(host string) (*Client, error) {
 }
 
 func (c *Client) Close() {
-    c.Envoy.Close()
+	c.Envoy.Close()
 	c.DB.Close()
 }
 
 func (c *Client) Reset() error {
-    err := c.Envoy.Rediscover()
+	err := c.Envoy.Rediscover()
 	if err != nil {
-        log.Println(err.Error())
-    }
+		log.Println(err.Error())
+	}
 
-    return err
+	return err
 }
 
 func (c *Client) Configured() bool {
-    return c.Envoy.Host() != ""
+	return c.Envoy.Host() != ""
 }
 
 // Sample polls an envoy device and stores the production values into the database
