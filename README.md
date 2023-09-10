@@ -20,4 +20,3 @@ Right now it supports a single graph (past 24-hours). I will work on adding 7-da
 * not have all the parameters hard coded, especially the hostname/ip address
 * implement dns-sd in the go-envoy package so you don't have to set a hostname/ip at all
 * more charts
-* roll-up boxes (tables) for weekly/montly/yearly charts
