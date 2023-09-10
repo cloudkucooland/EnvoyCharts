@@ -13,7 +13,7 @@ Right now it supports a single graph (past 24-hours). I will work on adding 7-da
 # Design decisions (or indecisions)
 * 10 minute sampling frequency seems good enough. During initial testing I did every minute, but the graph isn't any more informative at this higher frequency, so I'll stick with 10 minutes for now. Eventually it will be configurable.
 * go-echarts spits out Javascript Apache echarts (an older version at that). It seems nice enough for our purposes and is very simple to work with.
-* ObjectBox database. I've done a lot with sqlite over the years. It's fine. I just wanted to try something else. ObjectBox seems cool for this kind of thing, and very fast.
+* sqlite because it works ; early experiments with objectbox were fun, but it was too fiddly for me
 * go, because I like go
 
 # To Do
